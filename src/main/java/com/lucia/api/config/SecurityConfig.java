@@ -7,8 +7,11 @@ import com.lucia.api.security.JwtAuthenticationFilter;
 import com.lucia.api.security.UserDetailsServiceImpl;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -31,6 +34,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @EnableMethodSecurity
 public class SecurityConfig implements WebMvcConfigurer {
 
+    @Value("${APP_CORS_ALLOWED_ORIGINS:}")
+    private String appCorsAllowedOrigins;
+
     @Autowired
     private UserDetailsServiceImpl userDetailsService;
 
@@ -41,32 +47,8 @@ public class SecurityConfig implements WebMvcConfigurer {
     // CONFIGURACIÓN CORS
     // ============================================
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry
-            .addMapping("/**")
-            .allowedOriginPatterns(
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:3001",
-                /* Emulador Android: el “localhost” del emulador no es el PC; 10.0.2.2 es el host. */
-                "http://10.0.2.2:3000",
-                "http://10.0.2.2:3001",
-                /* Misma máquina u otra en LAN (útil si abres el front con http://<tu-ip>:3000) */
-                "http://192.168.*.*:3000",
-                "http://192.168.*.*:3001"
-            )
-            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
-            .allowedHeaders("*")
-            .allowCredentials(true)
-            .maxAge(3600);
-    }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(
+    private List<String> buildAllowedOriginPatterns() {
+        List<String> origins = new ArrayList<>(
             Arrays.asList(
                 "http://localhost:3000",
                 "http://localhost:3001",
@@ -78,6 +60,34 @@ public class SecurityConfig implements WebMvcConfigurer {
                 "http://192.168.*.*:3001"
             )
         );
+
+        if (appCorsAllowedOrigins != null && !appCorsAllowedOrigins.isBlank()) {
+            Arrays
+                .stream(appCorsAllowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .forEach(origins::add);
+        }
+
+        return origins;
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        List<String> allowedOrigins = buildAllowedOriginPatterns();
+        registry
+            .addMapping("/**")
+            .allowedOriginPatterns(allowedOrigins.toArray(new String[0]))
+            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
+            .allowedHeaders("*")
+            .allowCredentials(true)
+            .maxAge(3600);
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(buildAllowedOriginPatterns());
         configuration.setAllowedMethods(
             Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
         );
@@ -131,6 +141,8 @@ public class SecurityConfig implements WebMvcConfigurer {
                             "/v3/api-docs/**",
                             "/swagger-ui/**",
                             "/swagger-ui.html")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
                     // Rutas públicas
                     .requestMatchers("/api/v1/users/signup")
