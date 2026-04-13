@@ -49,8 +49,11 @@ public class UserController {
             @RequestPart("paternalSurname") String paternalSurname,
             @RequestPart(value = "maternalSurname", required = false) String maternalSurname,
             @RequestPart("phone") String phone,
-            @RequestPart("role") String role,
+            @RequestPart(value = "role", required = false) String role,
             @RequestPart(value = "profileImage", required = false) MultipartFile profileImage) {
+        User.Role resolvedRole = (role == null || role.isBlank())
+                ? User.Role.SELLER
+                : User.Role.fromPersistedOrApiName(role);
         UserRequestDTO request = UserRequestDTO.builder()
                 .email(email)
                 .password(password)
@@ -58,7 +61,7 @@ public class UserController {
                 .paternalSurname(paternalSurname)
                 .maternalSurname(maternalSurname != null ? maternalSurname : "")
                 .phone(phone)
-                .role(User.Role.fromPersistedOrApiName(role))
+                .role(resolvedRole)
                 .build();
         UserResponseDTO response = userService.signUp(request, profileImage);
         return ResponseDetail.ok(ResponseDetail.success(

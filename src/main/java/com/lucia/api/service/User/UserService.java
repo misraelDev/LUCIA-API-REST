@@ -41,6 +41,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 @Service
 public class UserService {
+    private static final long DEFAULT_SIGNUP_TENANT_ID = 3L;
 
     @Autowired
     private UserRepository userRepository;
@@ -99,6 +100,10 @@ public class UserService {
                 ? request.getPhone().trim()
                 : null);
         user.setRole(request.getRole() != null ? request.getRole() : User.Role.USER);
+        // Registro público: por defecto asociar SELLER al tenant 3.
+        if (user.getRole() == User.Role.SELLER) {
+            tenantRepository.findById(DEFAULT_SIGNUP_TENANT_ID).ifPresent(user::setTenant);
+        }
         user.setCreatedAt(java.time.OffsetDateTime.now());
         user.setUpdatedAt(java.time.OffsetDateTime.now());
 
