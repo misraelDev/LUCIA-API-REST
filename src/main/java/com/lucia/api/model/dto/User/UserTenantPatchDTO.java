@@ -17,4 +17,7 @@ public class UserTenantPatchDTO {
 
     @JsonProperty("tenant_id")
     private Long tenantId;
+
+    /** Rol objetivo: admin, user o seller. Si viene, tenant se resuelve automáticamente por rol. */
+    private String role;
 }

@@ -42,6 +42,9 @@ import org.springframework.data.jpa.domain.Specification;
 @Service
 public class UserService {
     private static final long DEFAULT_SIGNUP_TENANT_ID = 3L;
+    private static final long TENANT_ADMIN_ID = 1L;
+    private static final long TENANT_USER_ID = 2L;
+    private static final long TENANT_SELLER_ID = 3L;
 
     @Autowired
     private UserRepository userRepository;
@@ -373,23 +376,47 @@ public class UserService {
     }
 
     @Transactional
-    public UserSummaryDTO updateUserTenant(Long userId, Long tenantIdOrNull) {
+    public UserSummaryDTO updateUserTenant(Long userId, Long tenantIdOrNull, String roleOrNull) {
         User user = userRepository
                 .findByIdWithTenant(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-        if (tenantIdOrNull == null) {
-            user.setTenant(null);
+        User.Role previousRole = user.getRole();
+
+        if (roleOrNull != null && !roleOrNull.isBlank()) {
+            User.Role targetRole = User.Role.fromPersistedOrApiName(roleOrNull);
+            user.setRole(targetRole);
+            Long mappedTenantId = mapTenantIdByRole(targetRole);
+            Tenant mappedTenant = tenantRepository
+                    .findById(mappedTenantId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Tenant no encontrado para rol " + targetRole.apiAuthority()));
+            user.setTenant(mappedTenant);
         } else {
-            Tenant t = tenantRepository
-                    .findById(tenantIdOrNull)
-                    .orElseThrow(() -> new ResourceNotFoundException("Tenant no encontrado"));
-            user.setTenant(t);
+            if (tenantIdOrNull == null) {
+                user.setTenant(null);
+            } else {
+                Tenant t = tenantRepository
+                        .findById(tenantIdOrNull)
+                        .orElseThrow(() -> new ResourceNotFoundException("Tenant no encontrado"));
+                user.setTenant(t);
+            }
         }
         user.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(user);
+
+        if (previousRole != user.getRole()) {
+            tokenCacheService.invalidateSessionsForUser(user.getEmail());
+        }
         // Al cambiar tenant cambia la navegación/permisos efectivos -> invalidar sesión actual.
         tokenCacheService.invalidateSessionsForUser(user.getEmail());
         return getUserSummaryForAdmin(userId);
+    }
+
+    private Long mapTenantIdByRole(User.Role role) {
+        return switch (role) {
+            case ADMIN -> TENANT_ADMIN_ID;
+            case USER -> TENANT_USER_ID;
+            case SELLER -> TENANT_SELLER_ID;
+        };
     }
 
     private UserSummaryDTO toUserSummary(User user) {

@@ -129,7 +129,7 @@ public class UserController {
     @PatchMapping("/{id:\\d+}/tenant")
     public ResponseEntity<ResponseDetail<UserSummaryDTO>> patchUserTenant(
             @PathVariable @Min(1) Long id, @RequestBody UserTenantPatchDTO body) {
-        UserSummaryDTO dto = userService.updateUserTenant(id, body.getTenantId());
+        UserSummaryDTO dto = userService.updateUserTenant(id, body.getTenantId(), body.getRole());
         return ResponseDetail.ok(ResponseDetail.success(
                 "Tenant asignado",
                 "Se actualizó la organización del usuario.",
