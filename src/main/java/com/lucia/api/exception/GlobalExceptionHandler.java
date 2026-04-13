@@ -127,8 +127,9 @@ public class GlobalExceptionHandler {
         String fieldName = extractFieldNameFromErrorMessage(errorMessage);
 
         if (lowerMessage.contains("unique") || lowerMessage.contains("duplicate")) {
+            String displayField = toDisplayFieldName(fieldName);
             String message = fieldName != null
-                    ? String.format("El valor del campo '%s' ya existe en el sistema y debe ser único", fieldName)
+                    ? String.format("El valor del campo '%s' ya existe en el sistema y debe ser único", displayField)
                     : "El valor proporcionado ya existe en el sistema y debe ser único";
             return new IntegrityViolationInfo(message, fieldName);
         }
@@ -156,6 +157,14 @@ public class GlobalExceptionHandler {
             return null;
         }
 
+        Pattern keyPattern = Pattern.compile(
+                "Key \\(([^)]+)\\)=",
+                Pattern.CASE_INSENSITIVE);
+        Matcher keyMatcher = keyPattern.matcher(errorMessage);
+        if (keyMatcher.find()) {
+            return keyMatcher.group(1);
+        }
+
         Pattern postgresConstraintPattern = Pattern.compile(
                 "unique constraint \"([^\"]+)\"",
                 Pattern.CASE_INSENSITIVE);
@@ -170,14 +179,6 @@ public class GlobalExceptionHandler {
         Matcher mysqlMatcher = mysqlKeyPattern.matcher(errorMessage);
         if (mysqlMatcher.find()) {
             return mysqlMatcher.group(1);
-        }
-
-        Pattern keyPattern = Pattern.compile(
-                "Key \\(([^)]+)\\)=",
-                Pattern.CASE_INSENSITIVE);
-        Matcher keyMatcher = keyPattern.matcher(errorMessage);
-        if (keyMatcher.find()) {
-            return keyMatcher.group(1);
         }
 
         Pattern columnPattern = Pattern.compile(
@@ -196,9 +197,23 @@ public class GlobalExceptionHandler {
             return null;
         }
 
+        if ("uk6dotkott2kjsp8vw4d0m25fb7".equalsIgnoreCase(constraintName)) {
+            return "email";
+        }
+
         String cleaned = constraintName.replaceFirst("^[^_]+_", "");
         cleaned = cleaned.replaceFirst("_(key|unique|idx|pkey|uk|pk)$", "");
         return cleaned.isEmpty() ? null : cleaned;
+    }
+
+    private String toDisplayFieldName(String fieldName) {
+        if (fieldName == null || fieldName.isBlank()) {
+            return "desconocido";
+        }
+        if ("email".equalsIgnoreCase(fieldName)) {
+            return "correo electrónico";
+        }
+        return fieldName;
     }
 
     private static class IntegrityViolationInfo {
