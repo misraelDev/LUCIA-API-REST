@@ -19,6 +19,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import com.lucia.api.service.Cache.TokenCacheService;
 
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
 
 @Component
@@ -73,6 +74,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (authResponse != null && authResponse.getRole() != null) {
                 String role = authResponse.getRole().toLowerCase();
                 String email = jwtUtil.extractUsername(jwt); // Extraer el email del token
+                Date issuedAt = jwtUtil.extractIssuedAt(jwt);
+                long issuedAtMillis = issuedAt != null ? issuedAt.getTime() : 0L;
+
+                if (tokenCacheService.isTokenRevokedForUser(email, issuedAtMillis)) {
+                    logger.warn("Attempted to use token revoked by role/tenant change for user {}", email);
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                            "{\"error\": \"Token inválido\", \"message\": \"La sesión fue invalidada por cambios de permisos. Inicia sesión nuevamente.\"}");
+                    return;
+                }
 
                 if (SecurityContextHolder.getContext().getAuthentication() == null) {
                     List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role));

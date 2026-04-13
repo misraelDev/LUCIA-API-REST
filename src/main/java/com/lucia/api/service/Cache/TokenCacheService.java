@@ -23,6 +23,9 @@ public class TokenCacheService {
     
     // Blacklist de tokens invalidados (logout)
     private final ConcurrentHashMap<String, Long> tokenBlacklist = new ConcurrentHashMap<>();
+
+    // Marca por usuario: cualquier token emitido antes de este timestamp queda inválido.
+    private final ConcurrentHashMap<String, Long> userSessionInvalidAfter = new ConcurrentHashMap<>();
     
     private static class CacheEntry {
         private final AuthResponse authResponse;
@@ -99,6 +102,29 @@ public class TokenCacheService {
             tokenCache.remove(token);
             logger.info("Token invalidated (logout) for token: {}", token.substring(0, Math.min(10, token.length())) + "...");
         }
+    }
+
+    /**
+     * Invalida todas las sesiones activas de un usuario (por email/subject del JWT).
+     * Se usa cuando cambia rol/tenant/permisos.
+     */
+    public void invalidateSessionsForUser(String email) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        userSessionInvalidAfter.put(email.toLowerCase(), System.currentTimeMillis());
+        logger.info("All active sessions invalidated for user: {}", email);
+    }
+
+    /**
+     * Verifica si un token fue emitido antes del corte de invalidez del usuario.
+     */
+    public boolean isTokenRevokedForUser(String email, long issuedAtMillis) {
+        if (email == null || email.isBlank() || issuedAtMillis <= 0) {
+            return false;
+        }
+        Long invalidAfter = userSessionInvalidAfter.get(email.toLowerCase());
+        return invalidAfter != null && issuedAtMillis <= invalidAfter;
     }
     
     /**

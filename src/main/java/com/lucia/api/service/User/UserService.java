@@ -127,6 +127,7 @@ public class UserService {
     public UserResponseDTO updateUser(Long userId, UserRequestDTO request, MultipartFile profileImage) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        User.Role previousRole = user.getRole();
 
         // Validar que si se intenta cambiar el email, no esté duplicado
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
@@ -158,6 +159,10 @@ public class UserService {
         }
 
         User updated = userRepository.save(user);
+        if (previousRole != updated.getRole()) {
+            // Si cambia el rol, invalidar sesiones activas para forzar re-login
+            tokenCacheService.invalidateSessionsForUser(updated.getEmail());
+        }
         return UserResponseDTO.builder()
                 .id(updated.getId())
                 .email(updated.getEmail())
@@ -377,6 +382,8 @@ public class UserService {
         }
         user.setUpdatedAt(OffsetDateTime.now());
         userRepository.save(user);
+        // Al cambiar tenant cambia la navegación/permisos efectivos -> invalidar sesión actual.
+        tokenCacheService.invalidateSessionsForUser(user.getEmail());
         return getUserSummaryForAdmin(userId);
     }
 
